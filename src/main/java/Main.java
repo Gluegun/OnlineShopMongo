@@ -6,11 +6,11 @@ import com.mongodb.client.MongoDatabase;
 import com.mongodb.client.model.Accumulators;
 import com.mongodb.client.model.Aggregates;
 import com.mongodb.client.model.Filters;
+import org.bson.BsonDocument;
 import org.bson.Document;
 import org.bson.conversions.Bson;
 
 import java.util.ArrayList;
-import java.util.Arrays;
 import java.util.List;
 import java.util.Scanner;
 
@@ -139,24 +139,30 @@ public class Main {
                 }
 
 
-                AggregateIterable<Document> aggregateResult = aggregate(shopCollection);
+                AggregateIterable<Document> aggregateResult = group(shopCollection);
 
                 for (Document document : aggregateResult) {
                     String shopName = document.get("_id").toString();
-                    String[] shopGoods = null;
 
                     double avgPrice = Double.parseDouble(document.get("avgprice").toString());
                     int maxPrice = Integer.parseInt(document.get("maxprice").toString());
                     int minPrice = Integer.parseInt(document.get("minprice").toString());
 
-                    for (Document shopDoc : shopCollection.find()) {
-                        String shopDocName = shopDoc.get("name").toString();
-                        if (shopDocName.equalsIgnoreCase(shopName)) {
-                            shopGoods = shopDoc.get("goodName").toString().split(",");
+                    int amountOfGoods = 0;
+
+                    List<Bson> projectList = new ArrayList<>();
+                    Bson project = Aggregates.project(BsonDocument.parse("{   name : 1,    numberOfGoods :  " +
+                            "{$cond : {if: {$isArray : \"$goodName\"}, then : {$size: \"$goodName\"}, else : \"0\"}} }"));
+                    projectList.add(project);
+
+                    AggregateIterable<Document> aggregate = shopCollection.aggregate(projectList);
+                    for (Document doc : aggregate) {
+                        if (doc.get("name").toString().equalsIgnoreCase(shopName)) {
+                            amountOfGoods = Integer.parseInt(doc.get("numberOfGoods").toString());
+                            break;
                         }
                     }
 
-                    int amountOfGoods = shopGoods.length;
                     System.out.printf("Магазин: %s\nВсего товаров: %d\nСредняя цена товаров %.2f, " +
                                     "Максимальная цена товара %d, Минимальная цена товара %d\n",
                             shopName, amountOfGoods, avgPrice, maxPrice, minPrice);
@@ -207,6 +213,8 @@ public class Main {
             }
         }
 
+        scanner.close();
+
 
     }
 
@@ -223,7 +231,7 @@ public class Main {
     }
 
 
-    private static AggregateIterable<Document> aggregate(MongoCollection<Document> shopCollection) {
+    private static AggregateIterable<Document> group(MongoCollection<Document> shopCollection) {
         Bson lookup = Aggregates.lookup("goods", "goodName", "name", "goods_list");
         Bson unwind = Aggregates.unwind("$goods_list");
 
