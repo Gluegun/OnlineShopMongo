@@ -2,3 +2,4 @@
 target
 *.iml
 src/main/java/Test.java
+src/main/java/newMain.java
